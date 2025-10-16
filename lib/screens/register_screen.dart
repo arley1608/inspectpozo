@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../theme/app_buttons.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -17,7 +16,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _pass2Ctrl = TextEditingController();
-  bool _obscure = true;
+
+  bool _obscure1 = true;
+  bool _obscure2 = true;
   bool _loading = false;
 
   @override
@@ -31,25 +32,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _loading = true);
+
     try {
+      // Crear usuario
       final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
       );
       final user = cred.user;
-      if (user == null) throw Exception('Usuario nulo tras registrar.');
+      if (user == null) throw Exception('Error al crear la cuenta.');
 
       final name = _nameCtrl.text.trim();
       await user.updateDisplayName(name);
 
-      // Guardado “fire and forget” (no esperamos para evitar timeouts visuales)
+      // Guardar datos en Firestore
       FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': name,
         'email': _emailCtrl.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      });
 
       await _showResultDialog(
         title: 'Cuenta creada',
@@ -59,7 +61,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     } on FirebaseAuthException catch (e) {
       await _showResultDialog(
-        title: 'No se pudo registrar',
+        title: 'Error',
         message: _mapAuthError(e),
         success: false,
       );
@@ -96,7 +98,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               }
               if (mounted) {
                 Navigator.of(ctx).pop();
-                context.go('/'); // volver a login
+                context.go('/'); // volver al login
               }
             },
             child: const Text('Aceptar'),
@@ -113,11 +115,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       case 'invalid-email':
         return 'Correo inválido.';
       case 'weak-password':
-        return 'La contraseña es muy débil (mínimo 6 caracteres).';
+        return 'La contraseña es muy débil.';
       case 'network-request-failed':
-        return 'Sin conexión. Verifica tu internet.';
+        return 'Sin conexión. Intenta de nuevo.';
       default:
-        return 'Error: ${e.code}';
+        return 'Error: ${e.message ?? e.code}';
     }
   }
 
@@ -127,7 +129,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Crear cuenta'), centerTitle: true),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/'),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Crear cuenta',
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
+        ),
+      ),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -139,15 +153,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: ListView(
                   shrinkWrap: true,
                   children: [
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
+
+                    // Logo
                     Image.asset(
-                      'assets/logo.png',
-                      height: size.height * 0.25,
+                      'assets/logo_inspectpozo.png',
+                      height: size.height * 0.22,
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) =>
                           const FlutterLogo(size: 100),
                     ),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 32),
+
+                    // Nombre
                     TextFormField(
                       controller: _nameCtrl,
                       decoration: const InputDecoration(
@@ -156,69 +174,96 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         border: OutlineInputBorder(),
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty)
+                        if (v == null || v.trim().isEmpty) {
                           return 'Ingresa tu nombre';
-                        if (v.trim().length < 3) return 'Nombre muy corto';
+                        }
+                        if (v.trim().length < 3) {
+                          return 'Nombre muy corto';
+                        }
                         return null;
                       },
                     ),
                     spacing,
+
+                    // Correo
                     TextFormField(
                       controller: _emailCtrl,
                       keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(
-                        labelText: 'Correo',
-                        prefixIcon: Icon(Icons.email),
+                        labelText: 'Correo electrónico',
+                        prefixIcon: Icon(Icons.email_outlined),
                         border: OutlineInputBorder(),
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty)
+                        if (v == null || v.trim().isEmpty) {
                           return 'Ingresa tu correo';
-                        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v.trim()))
+                        }
+                        if (!RegExp(
+                          r'^[^@]+@[^@]+\.[^@]+',
+                        ).hasMatch(v.trim())) {
                           return 'Correo no válido';
+                        }
                         return null;
                       },
                     ),
                     spacing,
+
+                    // Contraseña
                     TextFormField(
                       controller: _passCtrl,
-                      obscureText: _obscure,
+                      obscureText: _obscure1,
                       decoration: InputDecoration(
                         labelText: 'Contraseña',
-                        prefixIcon: const Icon(Icons.lock),
+                        prefixIcon: const Icon(Icons.lock_outline),
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _obscure ? Icons.visibility : Icons.visibility_off,
+                            _obscure1 ? Icons.visibility : Icons.visibility_off,
                           ),
-                          onPressed: () => setState(() => _obscure = !_obscure),
+                          onPressed: () =>
+                              setState(() => _obscure1 = !_obscure1),
                         ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty)
+                        if (v == null || v.isEmpty) {
                           return 'Ingresa una contraseña';
+                        }
                         if (v.length < 6) return 'Mínimo 6 caracteres';
                         return null;
                       },
                     ),
                     spacing,
+
+                    // Confirmar contraseña
                     TextFormField(
                       controller: _pass2Ctrl,
-                      obscureText: _obscure,
-                      decoration: const InputDecoration(
+                      obscureText: _obscure2,
+                      decoration: InputDecoration(
                         labelText: 'Confirmar contraseña',
-                        prefixIcon: Icon(Icons.lock_outline),
-                        border: OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscure2 ? Icons.visibility : Icons.visibility_off,
+                          ),
+                          onPressed: () =>
+                              setState(() => _obscure2 = !_obscure2),
+                        ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty)
+                        if (v == null || v.isEmpty) {
                           return 'Confirma la contraseña';
-                        if (v != _passCtrl.text)
+                        }
+                        if (v != _passCtrl.text) {
                           return 'Las contraseñas no coinciden';
+                        }
                         return null;
                       },
                     ),
-                    const SizedBox(height: 24),
+
+                    const SizedBox(height: 28),
+
+                    // Botón Crear cuenta
                     FilledButton.icon(
                       onPressed: _loading ? null : _register,
                       icon: _loading
@@ -229,7 +274,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             )
                           : const Icon(Icons.check),
                       label: const Text('Crear cuenta'),
-                      style: AppButtons.primary,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
                     ),
                   ],
                 ),

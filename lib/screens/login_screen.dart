@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../theme/app_buttons.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _loading = true);
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -34,27 +34,26 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (mounted) context.go('/home');
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_mapError(e))));
+      final msg = switch (e.code) {
+        'invalid-email' => 'Correo inválido.',
+        'user-not-found' ||
+        'wrong-password' => 'Usuario o contraseña incorrectos.',
+        'network-request-failed' => 'Sin conexión. Intenta de nuevo.',
+        _ => 'No se pudo iniciar sesión (${e.code}).',
+      };
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(msg)));
+      }
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error inesperado. Intenta de nuevo.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error inesperado. Intenta de nuevo.')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  String _mapError(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'invalid-email':
-        return 'Correo inválido.';
-      case 'user-not-found':
-      case 'wrong-password':
-        return 'Usuario o contraseña incorrectos.';
-      default:
-        return 'No se pudo iniciar sesión (${e.code}).';
     }
   }
 
@@ -76,37 +75,48 @@ class _LoginScreenState extends State<LoginScreen> {
                   shrinkWrap: true,
                   children: [
                     const SizedBox(height: 24),
+
+                    // Logo arriba (sin texto)
                     Image.asset(
-                      'assets/logo.png',
+                      'assets/logo_inspectpozo.png',
                       height: size.height * 0.25,
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) =>
                           const FlutterLogo(size: 100),
                     ),
+
                     const SizedBox(height: 40),
+
+                    // Campo correo
                     TextFormField(
                       controller: _emailCtrl,
                       keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(
                         labelText: 'Correo',
-                        prefixIcon: Icon(Icons.email),
+                        prefixIcon: Icon(Icons.email_outlined),
                         border: OutlineInputBorder(),
                       ),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty)
                           return 'Ingresa tu correo';
-                        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v.trim()))
+                        if (!RegExp(
+                          r'^[^@]+@[^@]+\.[^@]+',
+                        ).hasMatch(v.trim())) {
                           return 'Correo no válido';
+                        }
                         return null;
                       },
                     ),
+
                     spacing,
+
+                    // Campo contraseña
                     TextFormField(
                       controller: _passCtrl,
                       obscureText: _obscure,
                       decoration: InputDecoration(
                         labelText: 'Contraseña',
-                        prefixIcon: const Icon(Icons.lock),
+                        prefixIcon: const Icon(Icons.lock_outline),
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
                           icon: Icon(
@@ -122,7 +132,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         return null;
                       },
                     ),
+
                     const SizedBox(height: 24),
+
+                    // Botón principal: Iniciar sesión (azul)
                     FilledButton.icon(
                       onPressed: _loading ? null : _signIn,
                       icon: _loading
@@ -133,15 +146,23 @@ class _LoginScreenState extends State<LoginScreen> {
                             )
                           : const Icon(Icons.login),
                       label: const Text('Iniciar sesión'),
-                      style: AppButtons.primary,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
                     ),
+
                     const SizedBox(height: 12),
+
+                    // Botón secundario: Registrarse (outlined)
                     OutlinedButton.icon(
                       onPressed: _loading
                           ? null
                           : () => context.push('/register'),
                       icon: const Icon(Icons.person_add),
                       label: const Text('Registrarse'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
                     ),
                   ],
                 ),

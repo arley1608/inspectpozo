@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../models/project.dart';
-import '../state/projects_provider.dart';
-import '../theme/app_buttons.dart';
+import '../state/projects_provider.dart'; // projectsRepoProvider
 
 class NewProjectScreen extends ConsumerStatefulWidget {
   const NewProjectScreen({super.key});
@@ -13,12 +17,14 @@ class NewProjectScreen extends ConsumerStatefulWidget {
 
 class _NewProjectScreenState extends ConsumerState<NewProjectScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _idCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _contractNumberCtrl = TextEditingController();
   final _clientCtrl = TextEditingController(); // Contratante
   final _contractorCtrl = TextEditingController(); // Contratista
   final _cadastralManagerCtrl = TextEditingController(); // Encargado catastro
+
   bool _saving = false;
 
   @override
@@ -30,6 +36,35 @@ class _NewProjectScreenState extends ConsumerState<NewProjectScreen> {
     _contractorCtrl.dispose();
     _cadastralManagerCtrl.dispose();
     super.dispose();
+  }
+
+  InputDecoration _dec(String label, IconData icon) => InputDecoration(
+    labelText: label,
+    prefixIcon: Icon(icon),
+    border: const OutlineInputBorder(),
+  );
+
+  Future<void> _showDialog({
+    required String title,
+    required String message,
+    bool success = true,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
+    if (success && mounted) context.pop(); // volver atrás tras éxito
   }
 
   Future<void> _save() async {
@@ -44,15 +79,55 @@ class _NewProjectScreenState extends ConsumerState<NewProjectScreen> {
       contractor: _contractorCtrl.text.trim(),
       cadastralManager: _cadastralManagerCtrl.text.trim(),
     );
-    ref.read(projectsProvider.notifier).add(p);
 
-    await Future.delayed(const Duration(milliseconds: 250));
-    if (!mounted) return;
-    setState(() => _saving = false);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Proyecto creado')));
-    Navigator.of(context).pop();
+    try {
+      final repo = ref.read(projectsRepoProvider);
+
+      // 1) Dispara la escritura a Firestore (no esperamos confirmación del servidor)
+      final addFuture = repo.addProject(p);
+
+      // 2) Confirmación optimista: esperamos a que el doc exista (cache/local)
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final docRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('projects')
+          .doc(p.id);
+
+      // Primer snapshot donde el doc exista (includeMetadataChanges permite cache)
+      await docRef
+          .snapshots(includeMetadataChanges: true)
+          .firstWhere((s) => s.exists);
+
+      if (!mounted) return;
+      setState(() => _saving = false);
+
+      // 3) Mostramos éxito
+      await _showDialog(
+        title: 'Proyecto creado',
+        message: 'El proyecto se guardó correctamente.',
+        success: true,
+      );
+
+      // 4) Si la confirmación remota fallara, puedes notificar luego (opcional)
+      unawaited(
+        addFuture.catchError((e) {
+          if (!mounted) return;
+          // Opcional: avisar en segundo plano
+          // ScaffoldMessenger.of(context).showSnackBar(
+          //   SnackBar(content: Text('Error de sincronización: $e')),
+          // );
+        }),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      await _showDialog(
+        title: 'Error al guardar',
+        message: 'No se pudo crear el proyecto. Intenta nuevamente.',
+        success: false,
+      );
+    }
   }
 
   @override
@@ -60,151 +135,113 @@ class _NewProjectScreenState extends ConsumerState<NewProjectScreen> {
     const spacing = SizedBox(height: 16);
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black87),
+        centerTitle: true,
         title: const Text(
-          'Nuevo Proyecto',
+          'Nuevo proyecto',
           style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
         ),
-        centerTitle: true,
       ),
       body: SafeArea(
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
               child: Form(
                 key: _formKey,
-                child: Column(
+                child: ListView(
+                  shrinkWrap: true,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                    TextFormField(
+                      controller: _idCtrl,
+                      decoration: _dec('ID del proyecto', Icons.tag),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Campo obligatorio'
+                          : null,
+                    ),
+                    spacing,
+                    TextFormField(
+                      controller: _nameCtrl,
+                      decoration: _dec(
+                        'Nombre del proyecto',
+                        Icons.business_center,
                       ),
-                      child: Column(
-                        children: [
-                          _field(
-                            controller: _idCtrl,
-                            label: 'ID del proyecto',
-                            icon: Icons.tag,
-                          ),
-                          spacing,
-                          _field(
-                            controller: _nameCtrl,
-                            label: 'Nombre del proyecto',
-                            icon: Icons.business_center,
-                          ),
-                          spacing,
-                          _field(
-                            controller: _contractNumberCtrl,
-                            label: 'Número de contrato',
-                            icon: Icons.confirmation_number,
-                            keyboard: TextInputType.number,
-                          ),
-                          spacing,
-                          _field(
-                            controller: _clientCtrl,
-                            label: 'Contratante',
-                            icon: Icons.account_balance,
-                          ),
-                          spacing,
-                          _field(
-                            controller: _contractorCtrl,
-                            label: 'Contratista',
-                            icon: Icons.handshake,
-                          ),
-                          spacing,
-                          _field(
-                            controller: _cadastralManagerCtrl,
-                            label: 'Nombre encargado catastro',
-                            icon: Icons.person,
-                          ),
-                          const SizedBox(height: 32),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: _saving ? null : _save,
-                              icon: _saving
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.save_rounded, size: 24),
-                              label: const Text('GUARDAR PROYECTO'),
-                              style: AppButtons.primary,
-                            ),
-                          ),
-                        ],
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Campo obligatorio'
+                          : null,
+                    ),
+                    spacing,
+                    TextFormField(
+                      controller: _contractNumberCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: _dec(
+                        'Número de contrato',
+                        Icons.confirmation_number,
+                      ),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Campo obligatorio'
+                          : null,
+                    ),
+                    spacing,
+                    TextFormField(
+                      controller: _clientCtrl,
+                      decoration: _dec('Contratante', Icons.account_balance),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Campo obligatorio'
+                          : null,
+                    ),
+                    spacing,
+                    TextFormField(
+                      controller: _contractorCtrl,
+                      decoration: _dec('Contratista', Icons.handshake),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Campo obligatorio'
+                          : null,
+                    ),
+                    spacing,
+                    TextFormField(
+                      controller: _cadastralManagerCtrl,
+                      decoration: _dec(
+                        'Nombre encargado catastro',
+                        Icons.person,
+                      ),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Campo obligatorio'
+                          : null,
+                    ),
+                    const SizedBox(height: 24),
+
+                    FilledButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.save_rounded),
+                      label: const Text('Guardar proyecto'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
-                    const SizedBox(height: 80),
                   ],
                 ),
               ),
             ),
-            Positioned(
-              bottom: 10,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Text(
-                  'InspectPozo',
-                  style: TextStyle(
-                    color: Colors.blueGrey.shade500,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _field({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType keyboard = TextInputType.text,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboard,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: Colors.blue.shade700),
-        filled: true,
-        fillColor: Colors.grey[50],
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.blue.shade700, width: 1.5),
-        ),
-      ),
-      validator: (v) =>
-          (v == null || v.trim().isEmpty) ? 'Campo obligatorio' : null,
     );
   }
 }

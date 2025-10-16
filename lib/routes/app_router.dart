@@ -1,5 +1,4 @@
 import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/splash_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/register_screen.dart';
@@ -23,5 +22,5 @@ final appRouter = GoRouter(
       builder: (_, __) => const ActiveProjectsScreen(),
     ),
   ],
-  redirect: (context, state) => null,
+  // nada de redirects que puedan hacer bucles
 );

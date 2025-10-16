@@ -1,15 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/projects_repository.dart';
 import '../models/project.dart';
 
-class ProjectsNotifier extends StateNotifier<List<Project>> {
-  ProjectsNotifier() : super(const []);
+/// Proveedor del repositorio Firestore
+final projectsRepoProvider = Provider<ProjectsRepository>((ref) {
+  return ProjectsRepository();
+});
 
-  void add(Project p) => state = [p, ...state];
-  void clear() => state = const [];
-}
-
-final projectsProvider = StateNotifierProvider<ProjectsNotifier, List<Project>>(
-  (ref) {
-    return ProjectsNotifier();
-  },
-);
+/// Stream de proyectos en tiempo real (opcional para la lista)
+final projectsStreamProvider = StreamProvider<List<Project>>((ref) {
+  final repo = ref.watch(projectsRepoProvider);
+  return repo.streamProjects();
+});

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
-import '../theme/app_buttons.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -23,6 +22,7 @@ class HomeScreen extends StatelessWidget {
       body: SafeArea(
         child: Stack(
           children: [
+            // saludo centrado arriba
             Positioned(
               top: 16,
               left: 16,
@@ -37,33 +37,52 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ),
+
+            // contenido principal
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  // logo
                   Image.asset(
-                    'assets/logo.png',
+                    'assets/logo_inspectpozo.png',
                     height: size.height * 0.22,
                     fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) => const FlutterLogo(size: 100),
                   ),
                   const SizedBox(height: 60),
+
+                  // Botón primario (azul)
                   FilledButton.icon(
                     onPressed: () => context.push('/projects/new'),
                     icon: const Icon(Icons.add_circle_outline),
                     label: const Text('Crear nuevo proyecto'),
-                    style: AppButtons.primary,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 14,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  FilledButton.icon(
+
+                  // Botón secundario (outlined)
+                  OutlinedButton.icon(
                     onPressed: () => context.push('/projects/active'),
                     icon: const Icon(Icons.folder_open),
                     label: const Text('Proyectos activos'),
-                    style: AppButtons.primary,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 14,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
+
+            // botón de cerrar sesión
             Positioned(
               top: 8,
               left: 8,
