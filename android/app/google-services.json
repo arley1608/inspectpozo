@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "65931194599",
+    "project_id": "inspectpozo",
+    "storage_bucket": "inspectpozo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:65931194599:android:edbf1059f9a569becd3242",
+        "android_client_info": {
+          "package_name": "com.example.inspectpozo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCxcA6TQf1VwZa1p0VjSvu8zXrwL0ljWc4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
