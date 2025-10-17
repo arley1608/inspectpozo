@@ -1,12 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/project.dart';
-import '../state/projects_provider.dart'; // projectsRepoProvider
+import '../state/projects_provider.dart'; // projectsLocalRepoProvider
 
 class NewProjectScreen extends ConsumerStatefulWidget {
   const NewProjectScreen({super.key});
@@ -21,9 +18,9 @@ class _NewProjectScreenState extends ConsumerState<NewProjectScreen> {
   final _idCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _contractNumberCtrl = TextEditingController();
-  final _clientCtrl = TextEditingController(); // Contratante
-  final _contractorCtrl = TextEditingController(); // Contratista
-  final _cadastralManagerCtrl = TextEditingController(); // Encargado catastro
+  final _clientCtrl = TextEditingController();
+  final _contractorCtrl = TextEditingController();
+  final _cadastralManagerCtrl = TextEditingController();
 
   bool _saving = false;
 
@@ -64,7 +61,7 @@ class _NewProjectScreenState extends ConsumerState<NewProjectScreen> {
         ],
       ),
     );
-    if (success && mounted) context.pop(); // volver atrás tras éxito
+    if (success && mounted) context.pop();
   }
 
   Future<void> _save() async {
@@ -81,45 +78,17 @@ class _NewProjectScreenState extends ConsumerState<NewProjectScreen> {
     );
 
     try {
-      final repo = ref.read(projectsRepoProvider);
-
-      // 1) Dispara la escritura a Firestore (no esperamos confirmación del servidor)
-      final addFuture = repo.addProject(p);
-
-      // 2) Confirmación optimista: esperamos a que el doc exista (cache/local)
-      final uid = FirebaseAuth.instance.currentUser!.uid;
-      final docRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('projects')
-          .doc(p.id);
-
-      // Primer snapshot donde el doc exista (includeMetadataChanges permite cache)
-      await docRef
-          .snapshots(includeMetadataChanges: true)
-          .firstWhere((s) => s.exists);
+      final repo = ref.read(projectsLocalRepoProvider);
+      await repo.addOrUpdate(p);
 
       if (!mounted) return;
       setState(() => _saving = false);
-
-      // 3) Mostramos éxito
       await _showDialog(
         title: 'Proyecto creado',
-        message: 'El proyecto se guardó correctamente.',
+        message: 'El proyecto se guardó correctamente (offline).',
         success: true,
       );
-
-      // 4) Si la confirmación remota fallara, puedes notificar luego (opcional)
-      unawaited(
-        addFuture.catchError((e) {
-          if (!mounted) return;
-          // Opcional: avisar en segundo plano
-          // ScaffoldMessenger.of(context).showSnackBar(
-          //   SnackBar(content: Text('Error de sincronización: $e')),
-          // );
-        }),
-      );
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() => _saving = false);
       await _showDialog(

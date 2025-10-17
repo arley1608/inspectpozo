@@ -1,14 +1,26 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/projects_repository.dart';
+import '../local/app_database.dart';
+import '../data/projects_local_repository.dart';
 import '../models/project.dart';
 
-/// Proveedor del repositorio Firestore
-final projectsRepoProvider = Provider<ProjectsRepository>((ref) {
-  return ProjectsRepository();
+/// BD (singleton simple para toda la app)
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  final db = AppDatabase();
+  ref.onDispose(db.close);
+  return db;
 });
 
-/// Stream de proyectos en tiempo real (opcional para la lista)
-final projectsStreamProvider = StreamProvider<List<Project>>((ref) {
-  final repo = ref.watch(projectsRepoProvider);
-  return repo.streamProjects();
+/// Repositorio local
+final projectsLocalRepoProvider = Provider<ProjectsLocalRepository>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  return ProjectsLocalRepository(db);
 });
+
+/// Stream de proyectos (local, offline)
+final projectsStreamProvider = StreamProvider<List<Project>>((ref) {
+  final repo = ref.watch(projectsLocalRepoProvider);
+  return repo.watchAll();
+});
+
+/// (Opcional) Alias si tenías referencias antiguas
+final projectsProvider = projectsStreamProvider;

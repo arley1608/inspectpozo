@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/project.dart';
-import '../state/projects_provider.dart'; // projectsStreamProvider & projectsRepoProvider
+import '../state/projects_provider.dart'; // projectsStreamProvider & projectsLocalRepoProvider
 
 class ActiveProjectsScreen extends ConsumerWidget {
   const ActiveProjectsScreen({super.key});
@@ -40,10 +40,8 @@ class ActiveProjectsScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             itemCount: projects.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (ctx, i) => _ProjectCard(
-              project: projects[i],
-              parentContext: context, // <<--- contexto estable del Scaffold
-            ),
+            itemBuilder: (ctx, i) =>
+                _ProjectCard(project: projects[i], parentContext: context),
           );
         },
       ),
@@ -85,16 +83,16 @@ class _EmptyState extends StatelessWidget {
 
 class _ProjectCard extends ConsumerWidget {
   final Project project;
-  final BuildContext parentContext; // <<--- contexto superior y estable
+  final BuildContext parentContext;
   const _ProjectCard({required this.project, required this.parentContext});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.read(projectsRepoProvider);
+    final repo = ref.read(projectsLocalRepoProvider);
 
     Future<void> _confirmDelete() async {
       final ok = await showDialog<bool>(
-        context: parentContext, // usar SIEMPRE el contexto estable
+        context: parentContext,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
           title: const Text('Eliminar proyecto'),
@@ -118,9 +116,8 @@ class _ProjectCard extends ConsumerWidget {
       if (ok != true) return;
 
       try {
-        await repo.deleteProject(project.id);
+        await repo.delete(project.id);
 
-        // ✅ Mensaje emergente de éxito usando parentContext (no se desmonta)
         await showDialog<void>(
           context: parentContext,
           barrierDismissible: false,
@@ -163,7 +160,6 @@ class _ProjectCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Título
             Text(
               project.name,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
@@ -174,22 +170,17 @@ class _ProjectCard extends ConsumerWidget {
               style: TextStyle(color: Colors.blueGrey.shade700),
             ),
             const Divider(height: 16),
-
-            // Datos
             _row('N° de contrato', project.contractNumber),
             _row('Contratante', project.client),
             _row('Contratista', project.contractor),
             _row('Encargado catastro', project.cadastralManager),
-
             const SizedBox(height: 12),
 
-            // Botones de acción
             Row(
               children: [
-                // Gestionar (azul)
                 FilledButton.icon(
                   onPressed: () {
-                    // TODO: implementar gestión del proyecto
+                    // TODO: gestionar proyecto
                   },
                   icon: const Icon(Icons.settings),
                   label: const Text('Gestionar'),
@@ -201,8 +192,6 @@ class _ProjectCard extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-
-                // Eliminar (rojo)
                 OutlinedButton.icon(
                   onPressed: _confirmDelete,
                   icon: const Icon(Icons.delete_outline),
